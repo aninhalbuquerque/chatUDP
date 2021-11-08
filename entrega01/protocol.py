@@ -12,29 +12,9 @@ class udp_connection:
     def open_client(self, server_ip, port):
         self.client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.server_address = (server_ip, port)
-    
-    def server_connection(self):
-        try:
-            msg, client_address = self.server.recvfrom(4096)
 
-            while True:
-                print('de', client_address, ':', str(msg,"utf8"))
-                msg, client_address = self.server.recvfrom(4096)
-        
-        except KeyboardInterrupt:
-            self.close_connection(self.server)
-    
-    def client_connection(self):
-        try:
-            msg = input("digite uma mensagem ('sair' para desconectar): ")
-            self.client.sendto(bytes(msg,"utf8"), self.server_address)
-
-            while msg != 'sair':
-                msg = input("digite uma mensagem ('sair' para desconectar): ")
-                self.client.sendto(bytes(msg,"utf8"), self.server_address)
-        
-        except KeyboardInterrupt:
-            self.close_connection(self.client)
+    def server_send(self, msg, address):
+        self.server.sendto(msg, address)
     
     def client_send(self, msg):
         self.client.sendto(msg, self.server_address)
@@ -42,6 +22,10 @@ class udp_connection:
     def server_receive(self, size):
         msg, client_adress = self.server.recvfrom(size) 
         return msg, client_adress
+    
+    def client_receive(self, size):
+        msg, adress = self.client.recvfrom(size) 
+        return msg
     
     def close_connection(self, sock):
         print('\nclosing socket')
