@@ -35,7 +35,13 @@ class udp_connection:
         
         except KeyboardInterrupt:
             self.close_connection(self.client)
-
+    
+    def client_send(self, msg):
+        self.client.sendto(msg, self.server_address)
+    
+    def server_receive(self, size):
+        msg, client_adress = self.server.recvfrom(size) 
+        return msg, client_adress
     
     def close_connection(self, sock):
         print('\nclosing socket')
