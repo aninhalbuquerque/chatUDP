@@ -4,7 +4,7 @@ client = udp_connection()
 client.open_client('localhost', 5000) 
 
 try:
-    msg = 'oie'
+    msg = 'haha'
     client.client_send(msg.encode())
 
     print('enviando arquivo')
