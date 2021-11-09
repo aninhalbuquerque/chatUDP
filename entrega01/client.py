@@ -1,43 +1,44 @@
 from protocol import *
+from os import walk
 
-client = udp_connection()
-client.open_client('localhost', 5000) 
+def chooseFile():
+    files = []
+    for root, dirs, file in walk('files/'):
+        for filename in file:
+            files.append(filename)
+    
+    i = 0
+    print('choose the file to send to server:')
+    for file in files:
+        print(str(i) + '. ' + str(file))
+        i += 1
+    
+    x = int(input())
+    while x >= i:
+        print('not a choice')
+        x = int(input())
+    
+    return files[x], files[x].split('.')[1]
 
 try:
-    msg = 'haha'
-    client.client_send(msg.encode())
+    client = udp_connection()
+    client.open_socket('localhost', 5000, 'client')
 
-    print('enviando arquivo')
-    file = open('files/tslyrics.txt', 'rb')
-    msg = file.read(4096)
-    
-    while msg:
-        client.client_send(msg)
-        msg = file.read(4096)
-    
-    file.close()
-    
-    msg = bytes('', "utf8") #pra ele saber que acabou o arquivo
-    client.client_send(msg)
+    filename, extension = chooseFile()
 
-    print('recebendo arquivo')
-    msg = client.client_receive(4096).decode()
-    filename = 'sendByServer_' + str(msg) + '.txt'
-    file = open(filename, 'wb')
+    msg = extension
+    client.send(msg.encode())
 
-    while 1:
-        msg = client.client_receive(4096)
+    client.send_file('files/' + filename)
 
-        if msg == bytes('', "utf8"):
-            print('terminou')
-            break
-        
-        file.write(msg)
-    
-    file.close()
+    msg, address = client.receive(4096)
+    msg = msg.decode()
+    filename = 'sendByServer_' + str(msg) + '.' + extension
 
-    client.close_connection(client.client)
+    client.recv_file(filename)
+
+    client.close_connection()
 
 except KeyboardInterrupt:
-    client.close_connection(client.client)
+    client.close_connection()
 

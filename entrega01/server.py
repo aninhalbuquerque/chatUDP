@@ -1,40 +1,21 @@
 from protocol import *
 
-server = udp_connection()
-server.open_server(5000)
-
 try: 
+    server = udp_connection()
+    server.open_socket('localhost', 5000, 'server')
+    
     while True:
-        msg, client_address = server.server_receive(4096) #receber o oi
-        
-        filename = 'sendByClient_' + str(client_address[1]) + '.txt'
+        extension, client_address = server.receive(4096)
+
+        filename = 'sendByClient_' + str(client_address[1]) + '.' + extension.decode()
         send_address = client_address
+        print('client connected:', client_address[1])
 
-        file = open(filename, 'wb')
-        print('recebendo arquivo de', client_address[1])
-        
-        while 1:
-            msg, client_address = server.server_receive(4096)
-            if msg == bytes('', "utf8"):
-                break
-            
-            file.write(msg)
-        
-        file.close()
+        server.recv_file(filename)
 
-        print('devolvendo arquivo de', send_address[1])
-        server.server_send(str(send_address[1]).encode(), send_address)
+        server.send(str(send_address[1]).encode(), send_address)
 
-        file = open(filename, 'rb')
-        msg = file.read(4096)
-        
-        while msg:
-            server.server_send(msg, send_address)
-            msg = file.read(4096)
-
-        print('terminou')
-        msg = bytes('', "utf8") #pra ele saber que acabou o arquivo
-        server.server_send(msg, send_address)
+        server.send_file(filename, send_address)
 
 except KeyboardInterrupt:
-    server.close_connection(server.server)
+    server.close_connection()
