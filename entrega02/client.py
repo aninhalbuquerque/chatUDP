@@ -27,13 +27,15 @@ try:
     filename, extension = chooseFile()
 
     msg = extension
-    client.send(msg.encode())
+    client.rdt_send(msg.encode())
 
+    print('chegou aqui')
     client.send_file('files/' + filename)
 
-    msg, address = client.receive(4096)
-    msg = msg.decode()
-    filename = 'sendByServer_' + str(msg) + '.' + extension
+    print('chegou aqui')
+    msg, address = client.rdt_recv()
+    dicio = eval(msg.decode())
+    filename = 'sendByServer_' + dicio['data'] + '.' + extension
 
     client.recv_file(filename)
 

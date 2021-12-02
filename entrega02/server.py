@@ -4,18 +4,21 @@ try:
     server = udp_connection()
     server.open_socket('localhost', 5000, 'server')
     
-    while True:
-        extension, client_address = server.receive(4096)
+    #while True:
+    extension, client_address = server.rdt_recv()
+    dicio = eval(extension.decode())
 
-        filename = 'sendByClient_' + str(client_address[1]) + '.' + extension.decode()
-        send_address = client_address
-        print('client connected:', client_address[1])
+    print(dicio)
 
-        server.recv_file(filename)
+    filename = 'sendByClient_' + str(client_address[1]) + '.' + dicio['data'].decode()
+    send_address = client_address
+    print('client connected:', client_address[1])
 
-        server.send(str(send_address[1]).encode(), send_address)
+    server.recv_file(filename)
 
-        server.send_file(filename, send_address)
+    server.rdt_send(str(send_address[1]).encode(), send_address)
+
+    server.send_file(filename, send_address)
 
 except KeyboardInterrupt:
     server.close_connection()

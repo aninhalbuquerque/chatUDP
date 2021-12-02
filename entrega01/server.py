@@ -5,7 +5,7 @@ try:
     server.open_socket('localhost', 5000, 'server')
     
     while True:
-        extension, client_address = server.receive(4096)
+        extension, client_address = server.recreive(4096)
 
         filename = 'sendByClient_' + str(client_address[1]) + '.' + extension.decode()
         send_address = client_address
