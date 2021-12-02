@@ -46,11 +46,11 @@ class udp_connection:
             address = self.server_address
         
         pkt = self.make_pkt(msg, self.seqNumber)
-        print("rdt_send:", pkt)
+        
         ack = False 
 
         while not ack:
-            print('PRESOOOOOOO')
+            #print('mandando:', pkt.decode())
             self.send(pkt, address)
 
             try:
@@ -58,16 +58,16 @@ class udp_connection:
             except socket.timeout:
                 print('timeout')
             else:
-                print('entrando')
                 ack = self.recv_pkt(msg)
+        
         self.sock.settimeout(None)
     
     def rdt_recv(self):
         pkt, address = self.sock.recvfrom(4096)
-
+        #print('recebendo:', pkt.decode())
         checksum = self.recv_pkt(pkt, 'receiver')
         if checksum:
-            self.send(self.make_pkt(bytes('ACK', 'utf8'), self.seqNumber))
+            self.send(self.make_pkt(bytes('ACK', 'utf8'), self.seqNumber), address)
             self.update_seq_number
         else:
             self.send(self.make_pkt(bytes('ACK', 'utf8'), 1 - self.seqNumber))
@@ -80,17 +80,17 @@ class udp_connection:
         
         print('sending file...')
         file = open(filename, 'rb')
-        msg = file.read(2048)
+        msg = file.read(1024)
         
         while msg:
             self.rdt_send(msg, address)
-            msg = file.read(2048)
+            msg = file.read(1024)
         
         file.close()
         
         print('done')
-        msg = bytes('', "utf8") #pra ele saber que acabou o arquivo
-        self.send(msg, address)
+        msg = bytes('bye', 'utf8') #pra ele saber que acabou o arquivo
+        self.rdt_send(msg, address)
     
     def recv_file(self, filename):
         print('receiving file...')
@@ -100,7 +100,7 @@ class udp_connection:
             msg, address = self.rdt_recv()
             dicio = eval(msg.decode())
 
-            if dicio['data'] == bytes('', "utf8"):
+            if dicio['data'] == bytes('bye', "utf8"):
                 break
             
             file.write(dicio['data'])
@@ -129,14 +129,14 @@ class udp_connection:
     def recv_pkt(self, msg, type='sender'):
         cksum = 0
         dicio = eval(msg.decode())
-        
+
         for byte in bytearray(dicio['data']):
             cksum ^= byte
         
         if cksum != dicio['cksum']:
             return False
         
-        if type == 'sender' and self.seq != dicio['seq']:
+        if type == 'sender' and self.seqNumber != dicio['seq']:
             return False
 
         if type == 'sender':
