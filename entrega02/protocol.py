@@ -1,27 +1,9 @@
 import socket
+from struct import unpack
 
 class udp_connection:
     serverOpen = True
     seqNumber = 0
-
-    def checksum(data):
-        pos = len(data)
-        if (pos & 1):
-            pos -= 1
-            sum = ord(data[pos])
-        else:
-            sum = 0
-
-        while pos > 0:
-            pos -= 2
-            sum += (ord(data[pos + 1]) << 8) + ord(data[pos])
-
-        sum = (sum >> 16) + (sum & 0xffff)
-        sum += (sum >> 16)
-
-        result = (~ sum) & 0xffff
-        result = result >> 8 | ((result & 0xff) << 8)
-        return chr(result / 256) + chr(result % 256)
 
     def open_socket(self, ip, port, type):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -65,8 +47,8 @@ class udp_connection:
     def rdt_recv(self):
         pkt, address = self.sock.recvfrom(4096)
         #print('recebendo:', pkt.decode())
-        checksum = self.recv_pkt(pkt, 'receiver')
-        if checksum:
+        not_corrupt = self.recv_pkt(pkt, 'receiver')
+        if not_corrupt:
             self.send(self.make_pkt(bytes('ACK', 'utf8'), self.seqNumber), address)
             self.update_seq_number
         else:
@@ -116,9 +98,7 @@ class udp_connection:
         self.seqNumber = (self.seqNumber + 1)%2
     
     def make_pkt(self, msg, seq):
-        cksum = 0
-        for byte in msg:
-            cksum ^= byte
+        cksum = self.checksum(msg)
 
         return str({
             'cksum': cksum,
@@ -127,11 +107,9 @@ class udp_connection:
         }).encode()
     
     def recv_pkt(self, msg, type='sender'):
-        cksum = 0
+        
         dicio = eval(msg.decode())
-
-        for byte in bytearray(dicio['data']):
-            cksum ^= byte
+        cksum = self.checksum(dicio['data'])
         
         if cksum != dicio['cksum']:
             return False
@@ -143,3 +121,23 @@ class udp_connection:
             self.update_seq_number
         
         return True
+    
+    def checksum(self, msg):
+        cksum = 0
+
+        array = bytearray(msg)[::-1]
+        lenght = len(array)
+
+        for i in range(lenght):
+            if i % 2:
+                continue 
+            
+            cksum += (array[i] << 8)
+            if i + 1 < lenght:
+                cksum += array[i+1]
+
+        while cksum >> 16:
+            cksum = (cksum >> 16) + (cksum & 0xffff)
+        
+        cksum = cksum ^ 0xffff
+        return cksum

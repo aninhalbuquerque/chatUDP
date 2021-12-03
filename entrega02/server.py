@@ -17,8 +17,6 @@ try:
         server.rdt_send(str(send_address[1]).encode(), send_address)
 
         server.send_file(filename, send_address)
-
-        print('cabou')
     
 
 except KeyboardInterrupt:
