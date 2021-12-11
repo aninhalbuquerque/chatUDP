@@ -1,21 +1,16 @@
 from protocol import *
-import threading
-
-def watchdog():
-  raise Exception('Seu tempo acabou!')
+import signal
 
 def timeout(signum, frame):
     raise Exception('Seu tempo acabou!')
 
-def try_receive_message():
-    alarm = threading.Timer(2, watchdog)
+signal.signal(signal.SIGALRM, timeout)
 
+def try_receive_message():
     try: 
-        print('...esperando rdt_recv...')
-        alarm.start()
+        signal.alarm(2)
         msg_received, address = client.rdt_recv()
-        alarm.cancel()
-        print('...chegou rdt_recv...')
+        signal.alarm(0)
         dicio = eval(msg_received.decode())
         return dicio['data'].decode()
 
@@ -35,15 +30,11 @@ try:
             msg_received = try_receive_message()
             if msg_received:
                 print(msg_received)
-        
-        alarm = threading.Timer(3, watchdog)
 
         try: 
-            print('...esperando input...')
-            alarm.start()
+            signal.alarm(3)
             msg_to_send = input()
-            alarm.cancel()
-            print('...recebeu input...')
+            signal.alarm(0)
             while client.has_message():
                 msg_received = try_receive_message()
                 if msg_received:
