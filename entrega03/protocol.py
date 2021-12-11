@@ -41,7 +41,7 @@ class udp_connection:
         ack = False 
 
         while not ack:
-            print('mandando:', pkt.decode(), 'para', str(self.get_user(address)))
+            #print('mandando:', pkt.decode(), 'para', str(self.get_user(address)))
             self.send(pkt, address)
 
             try:
@@ -54,23 +54,22 @@ class udp_connection:
                     continue
                 
                 ack = self.recv_pkt(msg, address)
-                print('msg:', msg.decode())
-                print('ack:', ack)
+                #print('msg:', msg.decode())
+                #print('ack:', ack)
         
         self.update_seq_number(address)
         self.sock.settimeout(None)
     
     def rdt_recv(self):
-        ack = False
-        while not ack:
+        while True:
             pkt, address = self.sock.recvfrom(4096)
             self.check_connection(pkt, address)
             seq = self.get_seq_number(address)
             not_corrupt = self.recv_pkt(pkt, address, 'receiver')
             if self.recebe < 20:
-                print('recebendo:', pkt.decode(), 'de', str(self.get_user(address)))
+                #print('recebendo:', pkt.decode(), 'de', str(self.get_user(address)))
                 self.recebe += 1
-                print('not corrupt') if not_corrupt else print('corrupt')
+                #print('not corrupt') if not_corrupt else print('corrupt')
             if not_corrupt:
                 pkt_ack = self.make_pkt(bytes('ACK', 'utf8'), seq)
                 #print('ack:', pkt)
@@ -101,7 +100,8 @@ class udp_connection:
         print('user', user, 'connected')
     
     def disconnect(self, address):
-        self.connecteds.__delitem__(address)
+        if address in self.connecteds:
+            del self.connecteds[address]
     
     def send_to_all_clients(self, msg):
         for address in self.connecteds:
@@ -187,3 +187,6 @@ class udp_connection:
         
         cksum = cksum ^ 0xffff
         return cksum
+
+    def has_message(self):
+        return self.sock.recv is not None

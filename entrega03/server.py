@@ -10,8 +10,17 @@ try:
         pkt, client_address = server.rdt_recv()
         
         dicio = eval(pkt.decode())
-        msg = str(server.get_user(client_address)) + ': ' + dicio['data'].decode()
+        user = str(server.get_user(client_address))
+        msg =  user + ': ' + dicio['data'].decode()
+        msg_bye = ''
+
+        if dicio['data'].decode() == 'bye':
+            msg_bye = '----------' + user + ' left the chat' + '----------'
+            server.disconnect(client_address)
+        
         server.send_to_all_clients(msg.encode())
+        if msg_bye:
+            server.send_to_all_clients(msg_bye.encode())
     
     server.close_connection()
     
