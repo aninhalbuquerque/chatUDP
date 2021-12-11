@@ -16,8 +16,7 @@ class udp_connection:
         if type == 'server':
             self.sock.bind(self.server_address)
         else:
-            self.connect('server', self.server_address)
-            
+            self.connect('server', self.server_address)     
 
     def send(self, msg, address = ''):
         if not address:
@@ -63,7 +62,7 @@ class udp_connection:
     def rdt_recv(self):
         while True:
             pkt, address = self.sock.recvfrom(4096)
-            self.check_connection(pkt, address)
+            new_connection = self.check_connection(pkt, address)
             seq = self.get_seq_number(address)
             not_corrupt = self.recv_pkt(pkt, address, 'receiver')
             if self.recebe < 20:
@@ -75,13 +74,13 @@ class udp_connection:
                 #print('ack:', pkt)
                 self.send(pkt_ack, address)
                 self.update_seq_number(address)
-                return pkt, address
+                return pkt, address, new_connection
             else:
                 self.send(self.make_pkt(bytes('ACK', 'utf8'), 1 - seq), address)
     
     def check_connection(self, pkt, address):
         if address in self.connecteds:
-            return True
+            return False
         
         if pkt:
             dicio = eval(pkt.decode())
@@ -101,7 +100,15 @@ class udp_connection:
     
     def disconnect(self, address):
         if address in self.connecteds:
+            print(self.connecteds[address]['user'] + ' disconnected')
             del self.connecteds[address]
+        
+    def get_connecteds(self):
+        msg_list = '---- users list ----'
+        for address in self.connecteds:
+            msg_list += '\n' + str(self.connecteds[address]['user'])
+
+        return msg_list
     
     def send_to_all_clients(self, msg):
         for address in self.connecteds:
