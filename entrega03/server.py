@@ -1,6 +1,12 @@
 from protocol import *
 from datetime import datetime
 
+def get_str(t):
+    if t < 10:
+        return '0' + str(t)
+    
+    return str(t)
+
 try: 
     server = udp_connection()
     server.open_socket('127.0.0.1', 5000, 'server')
@@ -14,7 +20,7 @@ try:
         n = datetime.now()
         t = n.timetuple()
         y, m, d, h, mi, sec, wd, yd, i = t
-        time = str(h) + ':' + str(mi) + ':' +str(sec)
+        time = get_str(h) + ':' + get_str(mi) + ':' + get_str(sec)
 
         msg =  str(time) + ' ' + user + ': ' + dicio['data'].decode()
         msg_bye = ''
