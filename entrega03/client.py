@@ -1,21 +1,6 @@
 from protocol import *
-import signal # só funciona em linux
-
-def timeout(signum, frame):
-    raise Exception('Seu tempo acabou!')
-
-signal.signal(signal.SIGALRM, timeout)
-
-def try_receive_message():
-    try: 
-        signal.alarm(2)
-        msg_received, address, new_connection = client.rdt_recv()
-        signal.alarm(0)
-        dicio = eval(msg_received.decode())
-        return dicio['data'].decode()
-
-    except Exception:
-        return ''
+import threading
+import time
 
 def get_user():
     while True:
@@ -28,49 +13,59 @@ def get_user():
         if cmd == 'hi, meu nome eh ':
             return msg[16:]
 
-try:
-    client = udp_connection()
-    client.open_socket('127.0.0.1', 5000, 'client')
-
-    user = get_user()
-    client.rdt_send(user.encode())
-
+def thread_recv_msg(client, lock):
+    print('Iniciou thread de recv')
     while True:
-        if client.has_message():
-            msg_received = try_receive_message()
-            if msg_received:
-                print(msg_received)
-
-        try: 
-            signal.alarm(3)
-            msg_to_send = input()
-            signal.alarm(0)
-            while client.has_message():
-                msg_received = try_receive_message()
-                if msg_received:
-                    print(msg_received)
-                else:
-                    break
-            
-            client.rdt_send(msg_to_send.encode())
-
-            if msg_to_send == 'bye':
-                break
-            
+        try:
+            client.sock.settimeout(1)
         except Exception:
-            continue
-    
-    print(user + ': bye')
-    print('\nyou left the chat')
-    client.close_connection()
+            break
+        msg_received = ''
+        try:
+            lock.acquire()
+            #print('lock no recv')
+            msg_received, address, new_connection = client.rdt_recv()
+            lock.release()
+            #print('release no recv')
 
-except KeyboardInterrupt:
-    while client.has_message():
-        msg_received = try_receive_message()
-        if msg_received == '':
+            dicio = eval(msg_received.decode())
+            msg_received = dicio['data'].decode()
+        except socket.timeout:
+            lock.release()
+            #print('deu')
+
+        if msg_received:
+            print(msg_received)
+        time.sleep(1)
+
+def thread_send_msg(client, lock):
+    print('Iniciou thread de send')
+    while True:
+        try :
+            msg_to_send = input()
+        except EOFError:
+            break
+        
+        lock.acquire()
+        #print('lock no send')
+        client.rdt_send(msg_to_send.encode())
+        lock.release()
+        #print('release no send')
+
+        if msg_to_send == 'bye':
             break
     
-    client.rdt_send('bye'.encode())
     print('\nyou left the chat')
     client.close_connection()
 
+client = udp_connection()
+client.open_socket('127.0.0.1', 5000, 'client')
+
+user = get_user()
+client.rdt_send(user.encode())
+
+lock = threading.Lock()
+thread1 = threading.Thread(target=thread_send_msg, args=[client, lock])
+thread2 = threading.Thread(target=thread_recv_msg, args=[client, lock])
+thread1.start()
+thread2.start()
