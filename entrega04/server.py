@@ -2,16 +2,11 @@ from protocol import *
 from datetime import datetime
 import threading
 
-def get_str(t):
-    if t < 10:
-        return '0' + str(t)
-    
-    return str(t)
-
 def thread_recv_msg(server, lock):
     while True:
         msg_received = ''
         user = ''
+        address = ''
         try:
             pkt, address, time = server.receive(4096)
 
@@ -20,7 +15,7 @@ def thread_recv_msg(server, lock):
                 msg_received = dicio['data'].decode()
                 user = str(server.get_user(address))
                 lock.acquire()
-                server.add_ack(time, address)
+                server.add_ack(time, msg_received, address)
                 lock.release()
 
         except KeyboardInterrupt:
@@ -28,17 +23,6 @@ def thread_recv_msg(server, lock):
         except Exception as e:
             #print(e)
             x = 0
-
-        if msg_received:
-            n = datetime.now()
-            t = n.timetuple()
-            y, m, d, h, mi, sec, wd, yd, i = t
-            time = get_str(h) + ':' + get_str(mi) + ':' + get_str(sec)
-
-            msg =  str(time) + ' ' + user + ': ' + msg_received
-            lock.acquire()
-            server.add_tosend(msg.encode())
-            lock.release()
 
 def thread_send_msg(server, lock):
     while True:
