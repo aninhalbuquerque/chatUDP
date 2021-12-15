@@ -35,45 +35,51 @@ class udp_connection:
         if not address:
             address = self.server_address
         
-        pkt = self.make_pkt(msg, self.get_seq_number(address))
+        pkt = self.make_pkt(msg, self.get_seq_number('send', address))
         
         ack = False 
 
         while not ack:
-            #print('mandando:', pkt.decode(), 'para', str(self.get_user(address)))
+            #if self.recebe < 20:
+                #print('mandando:', pkt.decode(), 'para', str(self.get_user(address)))
+                #self.recebe += 1
+            
             self.send(pkt, address)
 
             try:
                 msg, recv_address = self.receive(4096)
             except socket.timeout:
-                print('timeout')
+                if self.type == 'server':
+                    print('timeout')
             else:
                 msgACK = eval(msg.decode())['data'].decode()
                 if recv_address != address or msgACK != 'ACK':
                     continue
                 
                 ack = self.recv_pkt(msg, address)
-                #print('msg:', msg.decode())
-                #print('ack:', ack)
         
-        self.update_seq_number(address)
+        self.update_seq_number('send', address)
         self.sock.settimeout(None)
     
     def rdt_recv(self):
         while True:
             pkt, address = self.sock.recvfrom(4096)
+
+            msgACK = eval(pkt.decode())['data'].decode()
+            if msgACK == 'ACK':
+                continue 
+
             new_connection = self.check_connection(pkt, address)
-            seq = self.get_seq_number(address)
-            not_corrupt = self.recv_pkt(pkt, address, 'receiver')
-            if self.recebe < 20:
+            seq = self.get_seq_number('receive', address)
+            not_corrupt = self.recv_pkt(pkt, address, 'receive')
+            #if self.recebe < 20:
                 #print('recebendo:', pkt.decode(), 'de', str(self.get_user(address)))
-                self.recebe += 1
+                #self.recebe += 1
                 #print('not corrupt') if not_corrupt else print('corrupt')
             if not_corrupt:
                 pkt_ack = self.make_pkt(bytes('ACK', 'utf8'), seq)
-                #print('ack:', pkt)
                 self.send(pkt_ack, address)
-                self.update_seq_number(address)
+                self.update_seq_number('receive', address)
                 return pkt, address, new_connection
             else:
                 self.send(self.make_pkt(bytes('ACK', 'utf8'), 1 - seq), address)
@@ -91,12 +97,15 @@ class udp_connection:
             return False
  
     def connect(self, user, address):
-        #print('address:', address)
         self.connecteds[address] = {
             'user': user,
-            'seqNumber': 0
+            'seqNumber': {
+                'send': 0,
+                'receive': 0
+            }
         }
-        print('user', user, 'connected')
+        if self.type == 'server':
+            print('user', user, 'connected')
     
     def disconnect(self, address):
         if address in self.connecteds:
@@ -118,23 +127,21 @@ class udp_connection:
         print('\nclosing socket')
         self.sock.close()
     
-    def update_seq_number(self, address = ''):
-        #print('update seq -', address)
+    def update_seq_number(self, type, address = ''):
         if not address:
             address = self.server_address
         
-        self.connecteds[address]['seqNumber'] = 1 - self.connecteds[address]['seqNumber']
-        #print('new seq -', self.connecteds[address]['seqNumber'])
+        self.connecteds[address]['seqNumber'][type] = 1 - self.connecteds[address]['seqNumber'][type]
     
-    def get_seq_number(self, address = ''):
+    def get_seq_number(self, type, address = ''):
         if not address:
             address = self.server_address
         
         if address in self.connecteds:
-            return self.connecteds[address]['seqNumber']
+            return self.connecteds[address]['seqNumber'][type]
         else:
             self.connect(address[1], address)
-            return self.connecteds[address]['seqNumber']
+            return self.connecteds[address]['seqNumber'][type]
     
     def get_user(self, address = ''):
         if not address:
@@ -155,24 +162,19 @@ class udp_connection:
             'seq': seq
         }).encode()
     
-    def recv_pkt(self, msg, address, type='sender'):
+    def recv_pkt(self, msg, address, type='send'):
         
         dicio = eval(msg.decode())
         cksum = self.checksum(dicio['data'])
         
-        seq = self.get_seq_number(address)
+        seq = self.get_seq_number(type, address)
 
         if cksum != dicio['cksum']:
             return False
-        #print('from', self.connecteds[address]['user'])
-        #print('msg:', dicio['data'].decode())
-        #print('self.seqNumber:', seq)
-        #print('seq:           ', dicio['seq'])
 
         if seq != dicio['seq']:
             return False
 
-        #self.update_seq_number(address)
         return True
     
     def checksum(self, msg):
