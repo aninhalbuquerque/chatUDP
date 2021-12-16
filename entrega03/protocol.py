@@ -1,11 +1,7 @@
-from ctypes import addressof
 import socket
-from struct import unpack
 from datetime import datetime
 
 class udp_connection:
-    serverOpen = True
-    seqNumber = 0
     connecteds = {}
 
     buffer = {}

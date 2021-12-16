@@ -1,5 +1,4 @@
 from protocol import *
-from datetime import datetime
 import threading
 
 def thread_recv_msg(server, lock):
