@@ -1,12 +1,19 @@
+from ctypes import addressof
 import socket
 from struct import unpack
+from datetime import datetime
 
 class udp_connection:
     serverOpen = True
     seqNumber = 0
     connecteds = {}
 
-    recebe = 0
+    buffer = {}
+    acks = []
+    tosend = []
+    delete_buffer = []
+
+    bye = 0
 
     def open_socket(self, ip, port, type):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -18,71 +25,136 @@ class udp_connection:
         else:
             self.connect('server', self.server_address)     
 
-    def send(self, msg, address = ''):
+    def send(self, msg, time, address = ''):
         if not address:
             address = self.server_address 
         
-        return self.sock.sendto(msg, address)
+        now = str(datetime.now())
+        pkt = ''
 
-    def receive(self, size, address = ''):
-        if not address:
-            return self.sock.recvfrom(size)
+        if msg.decode() == 'ACK':
+            pkt = self.make_pkt(msg, self.get_seq_number('receive', address), time)
+            #print('mandando:', str(pkt), ' para', str(self.get_user(address)))
+            self.update_seq_number('receive', address)
+        else:
+            pkt = self.make_pkt(msg, self.get_seq_number('send', address), now)
+            #print('mandando:', str(pkt), ' para', str(self.get_user(address)))
+            self.buffer[now] = {
+                'pkt': pkt,
+                'address': address
+            }
+
+            if msg.decode() == 'bye':
+                self.bye = 1   
+
+        return self.sock.sendto(pkt, address)
+
+    def receive(self, size):
+        msg, recv_address = self.sock.recvfrom(size)
+        self.check_connection(msg, recv_address)
+        #print('recebendo:', str(msg), ' de', str(self.get_user(recv_address)))
+        dic = eval(msg.decode())
+
+        cksum = dic['cksum']
+        data = dic['data'].decode()
+        seq = dic['seq']
+        time = dic['time']
+
+        if data != 'ACK' and self.recv_pkt(msg, recv_address, 'receive'):
+            return msg, recv_address, time
+
+        if data == 'ACK' and self.recv_pkt(msg, recv_address, 'send'):
+            self.delete_buffer.append(time)
+            self.update_seq_number('send', recv_address)
         
-        return self.sock.recvfrom(size)
+        return '', recv_address, time
     
-    def rdt_send(self, msg, address = ''):
-        self.sock.settimeout(5)
+    def check_tosend(self):
+        if len(self.tosend):
+            item = self.tosend[0]
+            
+            pkt = item[0]
+            address_to = item[1]
+            address_from = item[2]
+            self.send(pkt, 0, address_to)
+
+            self.tosend.pop(0)
+
+            if self.type == 'server':
+                msg = pkt.decode().split(' ')
+                if len(msg) == 3 and msg[2] == 'bye' and address_to == address_from:
+                    self.disconnect(address_to)
+    
+    def check_buffer(self):
+        for time in self.delete_buffer:
+            if time in self.buffer:
+                del self.buffer[time]
+
+        self.delete_buffer = []
+        todelete = []
+    
+        for time in self.buffer:
+            now = datetime.now()
+            t = datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f')
+            t = now - t 
+            if t.seconds >= 5:
+                todelete.append(time)
+        
+        for time in todelete:
+            pkt = self.buffer[time]['pkt']
+            address = self.buffer[time]['address']
+
+            del self.buffer[time]
+
+            dic = eval(pkt.decode())
+            msg = dic['data']
+            self.send(msg, 0, address)
+
+    def check_acks(self):
+        if len(self.acks):
+            a = self.acks[0]
+            
+            msg = a[0]
+            time = a[1]
+            address = a[2]
+            msg_recv = a[3]
+
+            self.send(msg, time, address)
+            self.acks.pop(0)
+
+            if self.type == 'client' and self.bye == 1:
+                return True
+
+            if self.type == 'server' and msg_recv:
+                n = datetime.now()
+                t = n.timetuple()
+                y, m, d, h, mi, sec, wd, yd, i = t
+                time = self.get_str(h) + ':' + self.get_str(mi) + ':' + self.get_str(sec)
+
+                msg =  str(time) + ' ' + self.get_user(address) + ': ' + msg_recv
+                
+                if len(msg_recv) >= 17 and msg_recv[:16] == 'hi, meu nome eh ':
+                    msg = '----------' + self.get_user(address) + ' got in the chat' + '----------'
+
+                if msg_recv == 'bye':
+                    msg_bye = msg + '\n' + '----------' + self.get_user(address) + ' left the chat' + '----------'
+                    self.add_tosend(msg_bye.encode(), address, 1)
+
+                    self.tosend.append((msg.encode(), address, address))
+                elif msg_recv == 'list':
+                    msg_list = msg + '\n' + self.get_connecteds()
+                    self.tosend.append((msg_list.encode(), address, self.server_address))
+                else:
+                    self.add_tosend(msg.encode(), address)
+        
+        return False 
+    
+    def add_ack(self, time, msg_recv, address=''):
         if not address:
             address = self.server_address
         
-        pkt = self.make_pkt(msg, self.get_seq_number('send', address))
-        
-        ack = False 
-
-        while not ack:
-            #if self.recebe < 20:
-                #print('mandando:', pkt.decode(), 'para', str(self.get_user(address)))
-                #self.recebe += 1
-            
-            self.send(pkt, address)
-
-            try:
-                msg, recv_address = self.receive(4096)
-            except socket.timeout:
-                if self.type == 'server':
-                    print('timeout')
-            else:
-                msgACK = eval(msg.decode())['data'].decode()
-                if recv_address != address or msgACK != 'ACK':
-                    continue
-                
-                ack = self.recv_pkt(msg, address)
-        
-        self.update_seq_number('send', address)
-        self.sock.settimeout(None)
-    
-    def rdt_recv(self):
-        while True:
-            pkt, address = self.sock.recvfrom(4096)
-
-            msgACK = eval(pkt.decode())['data'].decode()
-            if msgACK == 'ACK':
-                continue 
-
-            new_connection = self.check_connection(pkt, address)
-            seq = self.get_seq_number('receive', address)
-            not_corrupt = self.recv_pkt(pkt, address, 'receive')
-            #if self.recebe < 20:
-                #print('recebendo:', pkt.decode(), 'de', str(self.get_user(address)))
-                #self.recebe += 1
-                #print('not corrupt') if not_corrupt else print('corrupt')
-            if not_corrupt:
-                pkt_ack = self.make_pkt(bytes('ACK', 'utf8'), seq)
-                self.send(pkt_ack, address)
-                self.update_seq_number('receive', address)
-                return pkt, address, new_connection
-            else:
-                self.send(self.make_pkt(bytes('ACK', 'utf8'), 1 - seq), address)
+        msg = 'ACK'.encode()
+        self.acks.append((msg, time, address, msg_recv))
     
     def check_connection(self, pkt, address):
         if address in self.connecteds:
@@ -90,8 +162,9 @@ class udp_connection:
         
         if pkt:
             dicio = eval(pkt.decode())
-            user = dicio['data'].decode()
-            self.connect(user, address)
+            msg = dicio['data'].decode()
+            if msg != 'ACK' and len(msg) >= 17 and msg[:16] == 'hi, meu nome eh ':
+                self.connect(msg[16:], address)
             return True
         else:
             return False
@@ -119,9 +192,11 @@ class udp_connection:
 
         return msg_list
     
-    def send_to_all_clients(self, msg):
+    def add_tosend(self, msg, address_from, x = 0):
         for address in self.connecteds:
-            self.rdt_send(msg, address)
+            if x and address == address_from:
+                continue
+            self.tosend.append((msg, address, address_from))
     
     def close_connection(self):
         print('\nclosing socket')
@@ -130,8 +205,8 @@ class udp_connection:
     def update_seq_number(self, type, address = ''):
         if not address:
             address = self.server_address
-        
-        self.connecteds[address]['seqNumber'][type] = 1 - self.connecteds[address]['seqNumber'][type]
+        if address in self.connecteds:
+            self.connecteds[address]['seqNumber'][type] = 1 - self.connecteds[address]['seqNumber'][type]
     
     def get_seq_number(self, type, address = ''):
         if not address:
@@ -140,8 +215,7 @@ class udp_connection:
         if address in self.connecteds:
             return self.connecteds[address]['seqNumber'][type]
         else:
-            self.connect(address[1], address)
-            return self.connecteds[address]['seqNumber'][type]
+            return 0
     
     def get_user(self, address = ''):
         if not address:
@@ -150,16 +224,16 @@ class udp_connection:
         if address in self.connecteds:
             return self.connecteds[address]['user']
         else:
-            self.connect(address[1], address)
-            return self.connecteds[address]['user']
+            return 'opa'
 
-    def make_pkt(self, msg, seq):
+    def make_pkt(self, msg, seq, time):
         cksum = self.checksum(msg)
 
         return str({
             'cksum': cksum,
             'data': msg,
-            'seq': seq
+            'seq': seq,
+            'time': time
         }).encode()
     
     def recv_pkt(self, msg, address, type='send'):
@@ -196,6 +270,9 @@ class udp_connection:
         
         cksum = cksum ^ 0xffff
         return cksum
-
-    def has_message(self):
-        return self.sock.recv is not None
+    
+    def get_str(self, t):
+        if t < 10:
+            return '0' + str(t)
+        
+        return str(t)
