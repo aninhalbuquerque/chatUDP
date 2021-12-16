@@ -143,7 +143,7 @@ class udp_connection:
                     self.tosend.append((msg.encode(), address, address))
                 elif msg_recv == 'list':
                     msg_list = msg + '\n' + self.get_connecteds()
-                    self.tosend.append((msg_list.encode(), address, self.server_address))
+                    self.add_tosend(msg_list.encode(), address)
                 else:
                     self.add_tosend(msg.encode(), address)
         
@@ -189,7 +189,7 @@ class udp_connection:
         msg_list = '---- users list ----'
         for address in self.connecteds:
             msg_list += '\n' + str(self.connecteds[address]['user'])
-
+        msg_list += '\n--------------------'
         return msg_list
     
     def add_tosend(self, msg, address_from, x = 0):

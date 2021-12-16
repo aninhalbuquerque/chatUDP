@@ -1,6 +1,7 @@
 from protocol import *
 import threading
-from datetime import datetime
+import os
+
 
 def get_user():
     while True:
@@ -63,7 +64,7 @@ def thread_write_msg(client, lock, user):
             except EOFError:
                 break
             except KeyboardInterrupt:
-                msg_to_send = 'bye'
+                break
 
             lock.acquire()
             client.add_tosend(msg_to_send.encode(), '')
@@ -78,6 +79,8 @@ try:
 
     user = get_user()
     
+    os.system('cls' if os.name == 'nt' else 'clear')
+
     lock = threading.Lock()
     thread1 = threading.Thread(target=thread_send_msg, args=[client, lock])
     thread2 = threading.Thread(target=thread_recv_msg, args=[client, lock])
@@ -92,6 +95,9 @@ try:
     thread2.join()
     thread3.join()
 
+    print('\n---------- you left the chat ----------')
+    client.close_connection()
+
 except KeyboardInterrupt:
-    print('\nyou left the chat')
+    print('\n---------- you left the chat ----------')
     client.close_connection()
