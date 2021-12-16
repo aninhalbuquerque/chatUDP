@@ -136,15 +136,16 @@ class udp_connection:
                 if len(msg_recv) >= 17 and msg_recv[:16] == 'hi, meu nome eh ':
                     msg = '----------' + self.get_user(address) + ' got in the chat' + '----------'
 
-                self.add_tosend(msg.encode(), address)
-
                 if msg_recv == 'bye':
-                    msg_bye = '----------' + self.get_user(address) + ' left the chat' + '----------'
+                    msg_bye = msg + '\n' + '----------' + self.get_user(address) + ' left the chat' + '----------'
                     self.add_tosend(msg_bye.encode(), address, 1)
-                
-                if msg_recv == 'list':
-                    msg_list = self.get_connecteds()
+
+                    self.tosend.append((msg.encode(), address, self.server_address))
+                elif msg_recv == 'list':
+                    msg_list = msg + '\n' + self.get_connecteds()
                     self.tosend.append((msg_list.encode(), address, self.server_address))
+                else:
+                    self.add_tosend(msg.encode(), address)
         
         return False 
     
