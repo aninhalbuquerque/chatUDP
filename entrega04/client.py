@@ -58,7 +58,7 @@ def thread_write_msg(client, lock, user):
             user = ''
         else:
             try :
-                msg_to_send = input('---> ')
+                msg_to_send = input()
                 print("\033[A                             \033[A")
             except EOFError:
                 break
