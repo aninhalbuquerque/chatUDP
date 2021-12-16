@@ -224,7 +224,7 @@ class udp_connection:
         if address in self.connecteds:
             return self.connecteds[address]['user']
         else:
-            return 'opa'
+            return ''
 
     def make_pkt(self, msg, seq, time):
         cksum = self.checksum(msg)
